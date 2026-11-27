@@ -118,6 +118,8 @@ function harness() {
 
 const bundle = await readFile(new URL("../main.js", import.meta.url), "utf8");
 const canvas = (...nodes) => JSON.stringify({ nodes, edges: [] });
+const connectedCanvas = (nodes, edges) => JSON.stringify({ nodes, edges });
+const edge = (fromNode, toNode) => ({ fromNode, toNode });
 const card = (id, text) => ({ id, type: "text", text });
 const frontmatter = path =>
   `---\ndescription: Archives text cards and note links removed from the source Canvas.\ncanvas: "[[${path}]]"\n---`;
@@ -148,6 +150,39 @@ test("archives only removed text and Markdown notes, preserving content and link
   assert.equal(h.content("folder/Board.md"),
     ["---\ntags: [mine]\n---\nExisting", entry(cardText), entry("[[other/Page#^block]]"),
       entry("[Lost page](../other/Lost%20page.md#Some%20heading)")].join("\n\n"));
+  assert.deepEqual(h.notes, []);
+});
+
+test("archives directly connected cards from the previous snapshot and removes context on undo", async () => {
+  const h = harness();
+  const first = card("first", "First");
+  const second = card("second", "Second\nmore");
+  const note = { id: "note", type: "file", file: "Notes/Page.md", subpath: "#Heading" };
+  const ignored = { id: "group", type: "group" };
+  const nodes = [first, second, note, ignored];
+  const edges = [
+    edge("first", "second"), edge("second", "first"), edge("note", "first"),
+    edge("first", "group"), edge("first", "missing"), edge("first", "first"),
+  ];
+  const board = h.put("Board.canvas", connectedCanvas(nodes, edges));
+  h.put("Notes/Page.md", "Note contents");
+  const plugin = await h.start();
+  h.change(board, connectedCanvas([card("second", "Changed"), note, ignored], []));
+  await plugin.flush();
+  const header = frontmatter("Board.canvas");
+  assert.equal(h.content("Board.md"), [
+    header, entry("First\n\nConnected elements:\n\n- Second\n  more\n- [[Notes/Page#Heading]]"),
+  ].join("\n\n"));
+  h.change(board, connectedCanvas(nodes, edges));
+  await plugin.flush();
+  assert.equal(h.content("Board.md"), header);
+  h.change(board, connectedCanvas([note, ignored], []));
+  await plugin.flush();
+  assert.equal(h.content("Board.md"), [
+    header,
+    entry("First\n\nConnected elements:\n\n- Second\n  more\n- [[Notes/Page#Heading]]"),
+    entry("Second\nmore\n\nConnected elements:\n\n- First"),
+  ].join("\n\n"));
   assert.deepEqual(h.notes, []);
 });
 

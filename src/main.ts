@@ -97,11 +97,20 @@ export default class SaveRemovedCanvas extends Plugin {
     const canvasPath = canvas.path;
     const path = archivePath(canvasPath);
     const archive = this.archives.get(path);
-    const restored = new Set(archive?.entries.filter(entry => next.has(entry.id) && !previous.has(entry.id))
+    const restored = new Set(archive?.entries.filter(entry => next.nodes.has(entry.id) && !previous.nodes.has(entry.id))
       .map(entry => entry.id));
     const removed = [];
-    for (const [id, card] of previous) {
-      if (card && !next.has(id)) removed.push({ id, text: this.renderCard(card, path) });
+    for (const [id, card] of previous.nodes) {
+      if (!card || next.nodes.has(id)) continue;
+      const connected = [];
+      for (const neighbor of previous.connections.get(id) ?? []) {
+        const connectedCard = previous.nodes.get(neighbor);
+        if (connectedCard) connected.push(this.renderCard(connectedCard, path));
+      }
+      const context = connected.length
+        ? `\n\nConnected elements:\n\n${connected.map(text => `- ${text.replace(/\n/g, "\n  ")}`).join("\n")}`
+        : "";
+      removed.push({ id, text: this.renderCard(card, path) + context });
     }
     if (!removed.length && !restored.size) return true;
 

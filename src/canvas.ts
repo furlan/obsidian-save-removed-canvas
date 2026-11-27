@@ -1,5 +1,5 @@
 export type Card = { type: "text"; text: string } | { type: "file"; path: string; subpath?: string };
-export type Snapshot = Map<string, Card | null>;
+export type Snapshot = { nodes: Map<string, Card | null>; connections: Map<string, Set<string>> };
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -11,7 +11,7 @@ export function parseCanvas(content: string): Snapshot {
     throw new Error("Invalid Canvas document");
   }
 
-  const nodes: Snapshot = new Map();
+  const nodes = new Map<string, Card | null>();
   for (const node of data.nodes as unknown[]) {
     if (!isRecord(node) || typeof node.id !== "string" || !node.id ||
         typeof node.type !== "string" || nodes.has(node.id)) {
@@ -30,7 +30,20 @@ export function parseCanvas(content: string): Snapshot {
     }
     nodes.set(node.id, card);
   }
-  return nodes;
+  const connections = new Map<string, Set<string>>();
+  for (const edge of data.edges as unknown[]) {
+    if (!isRecord(edge) || typeof edge.fromNode !== "string" || !edge.fromNode ||
+        typeof edge.toNode !== "string" || !edge.toNode) {
+      throw new Error("Invalid Canvas edge");
+    }
+    if (edge.fromNode === edge.toNode) continue;
+    for (const [node, neighbor] of [[edge.fromNode, edge.toNode], [edge.toNode, edge.fromNode]]) {
+      let connected = connections.get(node);
+      if (!connected) connections.set(node, connected = new Set());
+      connected.add(neighbor);
+    }
+  }
+  return { nodes, connections };
 }
 
 export function missingNoteLink(path: string, source: string, subpath = ""): string {
