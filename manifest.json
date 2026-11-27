@@ -1,7 +1,7 @@
 {
   "id": "save-removed-canvas",
   "name": "Save Removed Canvas Elements",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "minAppVersion": "1.5.7",
   "description": "Archives removed Canvas text cards and note links in a sibling Markdown note.",
   "author": "Flavio Furlan",
